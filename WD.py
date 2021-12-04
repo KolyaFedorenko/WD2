@@ -15,16 +15,25 @@ forecasts = soup.find_all('div', class_='round-5')
 
 for forecast in forecasts:
     text=(forecast.text)
+    text=text.replace("Сегодня ", "По Цельсию сегодня ")
+    text=text.replace("ожидается ", "ожидается от ")
+    text=text.replace("..", "° до ")
+    text=text.replace("°C°F","°")
+    text=text.replace(" °, ","°, ")
+    text=text.replace("Завтра: ", "Завтра: по Цельсию от ")
+    text=text.replace("°, +", "°, по Фаренгейту от +")
+    text=text.replace("°, -", "°, по Фаренгейту от -")
 
 from vk_api.longpoll import VkLongPoll, VkEventType
 longpoll = VkLongPoll(vk_session)
 vk = vk_session.get_api()
 
-def weather_message():
-    vk.messages.send(user_id=event.user_id, message=str(text), random_id=get_random_id())
-
 def messagesend(botmessage):
     vk.messages.send(user_id=event.user_id, message=botmessage, random_id=event.random_id)
+
+def weather_message():
+    messagesend(str(text))
+
 
 def shedule_every_minutes():
     messagesend('Прогноз погоды будет приходить каждые полчаса')
@@ -80,7 +89,7 @@ for event in longpoll.listen():
             messagesend(str(text))
 
         if event.text == 'b':
-            sqlite_connection = sqlite3.connect('D:/users/is12332/Desktop/SQLiteStudio/forecasts')
+            sqlite_connection = sqlite3.connect('D:/Desktop/SQLiteStudio/SQLiteDataBase')
             cursor = sqlite_connection.cursor()
             date=cursor.execute("SELECT Date, Forecast FROM forecasts")
             date=cursor.fetchall()
@@ -95,11 +104,7 @@ for event in longpoll.listen():
             datenew=datenew.replace("-", ".")
             datenew=datenew.replace(",", " - ")
             datenew=datenew.replace("2021", "\n2021") 
-
             messagesend(datenew)
 
         if event.text == 'c':
             messagesend('Когда должен приходить прогноз погоды?\n\n1. Каждые полчаса\n2. Каждый час\n3. Каждые 3 часа\n4. Каждые 6 часов\n5. Утром и вечером')
-
-
-            
