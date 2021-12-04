@@ -4,8 +4,9 @@ import vk_api
 from vk_api.utils import get_random_id
 import schedule 
 import time
+import sqlite3
 
-vk_session = vk_api.VkApi(token='3e0d60982cd52ce4790a744e3386709cbeff9ff8e821e0a9125b867122fa2e2891a9f9aae50e74667877')
+vk_session = vk_api.VkApi(token='3e0d60982cd52ce4790a744e3386709cbeff9ff8e821e0a9125b867122fa2e2891a9f9aae50e746678775')
 
 url = 'https://rp5.ru/Погода_в_Абакане'
 response = requests.get(url)
@@ -79,7 +80,23 @@ for event in longpoll.listen():
             messagesend(str(text))
 
         if event.text == 'b':
-            messagesend('123')
+            sqlite_connection = sqlite3.connect('D:/users/is12332/Desktop/SQLiteStudio/forecasts')
+            cursor = sqlite_connection.cursor()
+            date=cursor.execute("SELECT Date, Forecast FROM forecasts")
+            date=cursor.fetchall()
+            datenew= ''.join(str(date) for date in date)
+            datenew=datenew.replace("[", "")
+            datenew=datenew.replace("]", "")
+            datenew=datenew.replace("'", "")
+            datenew=datenew.replace("(", "")
+            datenew=datenew.replace(")", "")
+            datenew=datenew.replace(",,", ", ")
+            datenew=datenew.replace(",", ", ")
+            datenew=datenew.replace("-", ".")
+            datenew=datenew.replace(",", " - ")
+            datenew=datenew.replace("2021", "\n2021") 
+
+            messagesend(datenew)
 
         if event.text == 'c':
             messagesend('Когда должен приходить прогноз погоды?\n\n1. Каждые полчаса\n2. Каждый час\n3. Каждые 3 часа\n4. Каждые 6 часов\n5. Утром и вечером')
