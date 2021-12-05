@@ -4,25 +4,23 @@ import vk_api
 from vk_api.utils import get_random_id
 import schedule 
 import datetime
+import time
 import sqlite3
+import threading
 
 vk_session = vk_api.VkApi(token='3e0d60982cd52ce4790a744e3386709cbeff9ff8e821e0a9125b867122fa2e2891a9f9aae50e746678775')
+sqlite_connection = sqlite3.connect('D:/SOULBURN/SQLiteStudio/SQLiteDataBase')
+cursor = sqlite_connection.cursor()
 
 url = 'https://rp5.ru/Погода_в_Абакане'
 response = requests.get(url)
+print(response.status_code)
 soup = BeautifulSoup(response.text, 'lxml')
 forecasts = soup.find_all('div', class_='round-5')
-
 for forecast in forecasts:
     text=(forecast.text)
-    text=text.replace("Сегодня ", "По Цельсию сегодня ")
-    text=text.replace("ожидается ", "ожидается от ")
-    text=text.replace("..", "° до ")
-    text=text.replace("°C°F","°")
-    text=text.replace(" °, ","°, ")
-    text=text.replace("Завтра: ", "Завтра: по Цельсию от ")
-    text=text.replace("°, +", "°, по Фаренгейту от +")
-    text=text.replace("°, -", "°, по Фаренгейту от -")
+    text=text.replace("Сегодня ", "По Цельсию сегодня ").replace("ожидается ", "ожидается от ").replace("..", "° до ").replace("°C°F","°").replace(" °, ","°, ")
+    text=text.replace("Завтра: ", "Завтра: по Цельсию от ").replace("°, +", "°, по Фаренгейту от +").replace("°, -", "°, по Фаренгейту от -")
 
 from vk_api.longpoll import VkLongPoll, VkEventType
 longpoll = VkLongPoll(vk_session)
@@ -32,7 +30,7 @@ def messagesend(botmessage):
     vk.messages.send(user_id=event.user_id, message=botmessage, random_id=event.random_id)
 
 def weather_message():
-    messagesend(str(text))
+    vk.messages.send(user_id=event.user_id, message=str(text), random_id=get_random_id())
 
 
 def shedule_every_minutes():
@@ -68,57 +66,44 @@ for event in longpoll.listen():
 
     if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
         if event.text == '1':
-            shedule_every_minutes()
+            minutes_thread=threading.Thread(target=shedule_every_minutes).start()
 
         if event.text == '2':
-            shedule_every_hour()
+            one_hour_thread=threading.Thread(target=shedule_every_hour).start()
 
         if event.text == '3':
-            shedule_every_hours(3)
+            three_hours_thread=threading.Thread(target=shedule_every_hours, kwargs={'hours':3}).start()
 
         if event.text == '4':
-            shedule_every_hours(6)
+            six_hours_thread=threading.Thread(target=shedule_every_hours, kwargs={'hours':6}).start()
 
         if event.text == '5':
-            shedule_every_day()
+            everyday_thread=threading.Thread(target=shedule_every_day).start()
 
-        if event.text == 'Привет' or event.text == 'привет' or event.text == 'Начать' or event.text == 'начать':
+        if event.text == 'Привет' or event.text == 'привет' or event.text == 'Начать' or event.text == 'начать' or event.text == 'menu' or event.text == 'Меню' or event.text == 'Назад':
             messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую неделю\nc) Получать прогноз погоды по расписанию')
         
         if event.text == 'a':
             messagesend(str(text))
 
         if event.text == 'b':
-            sqlite_connection = sqlite3.connect('D:/Desktop/SQLiteStudio/SQLiteDataBase')
-            cursor = sqlite_connection.cursor()
-            date=cursor.execute("SELECT Date, Forecast FROM forecasts")
+            date=cursor.execute("SELECT Date, Forecast FROM Forecasts")
             date=cursor.fetchall()
             datenew= ''.join(str(date) for date in date)
-            datenew=datenew.replace("[", "")
-            datenew=datenew.replace("]", "")
-            datenew=datenew.replace("'", "")
-            datenew=datenew.replace("(", "")
-            datenew=datenew.replace(")", "")
-            datenew=datenew.replace(",,", ", ")
-            datenew=datenew.replace(",", ", ")
-            datenew=datenew.replace("-", ".")
-            datenew=datenew.replace(",", ": ")
-            datenew=datenew.replace("2021", "\n\n2021") 
+            datenew=datenew.replace("[", "").replace("]", "").replace("'", "").replace("(", "").replace(")", "").replace(",,", ", ").replace(",", ", ")
+            datenew=datenew.replace("-", "/").replace("от /", "от -").replace("до /", "до -").replace(",", ": ").replace("°:","°,").replace("2021", "\n\n2021")
             messagesend(datenew)
 
         if event.text == 'c':
             messagesend('Когда должен приходить прогноз погоды?\n\n1. Каждые полчаса\n2. Каждый час\n3. Каждые 3 часа\n4. Каждые 6 часов\n5. Утром и вечером')
 
         if event.text == 'insert':
-            sqlite_connection = sqlite3.connect('D:/Desktop/SQLiteStudio/SQLiteDataBase')
-            cursor = sqlite_connection.cursor()
             insertid=cursor.execute("SELECT ID FROM Forecasts WHERE ID=(SELECT MAX(ID) FROM Forecasts)")
             insertid=cursor.fetchone()
             insertid= ''.join(str(insertid) for insertid in insertid)
             insertid=int(insertid)+1
             messagesend(str(insertid))
-            text=text.replace("По Цельсию сегодня ожидается", "Ожидается")
-            text=text.replace("Завтра:", "На следующий день:")
+            text=text.replace("По Цельсию сегодня ожидается", "Ожидается").replace("Завтра:", "На следующий день:")
             insertintotable=cursor.execute("INSERT INTO Forecasts (ID, Date, Forecast) VALUES ('" + str(insertid) + "', '" + str(datetime.date.today()) + "', '" + str(text) + "');")
             sqlite_connection.commit()
         
