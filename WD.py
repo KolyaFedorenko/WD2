@@ -32,6 +32,18 @@ def messagesend(botmessage):
 def weather_message():
     vk.messages.send(user_id=event.user_id, message=str(text), random_id=get_random_id())
 
+def select_sql():
+    for event in longpoll.listen():
+        if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
+            try:
+                date=cursor.execute(event.text)
+                date=cursor.fetchall()
+                datenew= ''.join(str(date) for date in date)
+                datenew=datenew.replace("(","\n").replace(", '"," | ").replace("'","").replace(")","")
+                messagesend(datenew)
+            except Exception:
+                messagesend('Допущена ошибка в SQL-выражении')
+
 
 def shedule_every_minutes():
     messagesend('Прогноз погоды будет приходить каждые полчаса')
@@ -65,6 +77,7 @@ def shedule_every_day():
 for event in longpoll.listen():
 
     if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
+
         if event.text == '1':
             minutes_thread=threading.Thread(target=shedule_every_minutes).start()
 
@@ -106,6 +119,14 @@ for event in longpoll.listen():
             text=text.replace("По Цельсию сегодня ожидается", "Ожидается").replace("Завтра:", "На следующий день:")
             insertintotable=cursor.execute("INSERT INTO Forecasts (ID, Date, Forecast) VALUES ('" + str(insertid) + "', '" + str(datetime.date.today()) + "', '" + str(text) + "');")
             sqlite_connection.commit()
+
+        if event.text == 'select':
+            messagesend('Введите SELECT-запрос')
+            select_sql()
+            
+         
+
+        
         
 
                     
