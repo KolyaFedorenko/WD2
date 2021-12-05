@@ -9,7 +9,7 @@ import sqlite3
 import threading
 
 vk_session = vk_api.VkApi(token='3e0d60982cd52ce4790a744e3386709cbeff9ff8e821e0a9125b867122fa2e2891a9f9aae50e746678775')
-sqlite_connection = sqlite3.connect('D:/SOULBURN/SQLiteStudio/SQLiteDataBase')
+sqlite_connection = sqlite3.connect('D:/Desktop/SQLiteStudio/SQLiteDataBase')
 cursor = sqlite_connection.cursor()
 
 url = 'https://rp5.ru/Погода_в_Абакане'
@@ -33,17 +33,48 @@ def weather_message():
     vk.messages.send(user_id=event.user_id, message=str(text), random_id=get_random_id())
 
 def select_sql():
+    messagesend('Введите SELECT-запрос')
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
-            try:
-                date=cursor.execute(event.text)
-                date=cursor.fetchall()
-                datenew= ''.join(str(date) for date in date)
-                datenew=datenew.replace("(","\n").replace(", '"," | ").replace("'","").replace(")","")
-                messagesend(datenew)
-            except Exception:
-                messagesend('Допущена ошибка в SQL-выражении')
+            if event.text != 'back':
+                try:
+                    date=cursor.execute(event.text)
+                    date=cursor.fetchall()
+                    datenew= ''.join(str(date) for date in date)
+                    datenew=datenew.replace("(","\n").replace(", '"," | ").replace("'","").replace(")","")
+                    messagesend(datenew)
+                except Exception:
+                    messagesend('Допущена ошибка в SQL-выражении')
+            else:
+                messagesend('Открыта админ-панель. Возможности:\n1. Ввести SQL-запрос, включающий SELECT\n2. Ввести SQL-запрос, используя INSERT, DELETE или UPDATE')
+                return(0)
 
+def delete_insert_update_sql():
+    messagesend('Введите INSERT, DELETE или UPDATE-запрос')
+    for event in longpoll.listen():
+        if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
+            if event.text != 'back':
+                try:
+                    insertid=cursor.execute(event.text)
+                    sqlite_connection.commit()
+                    messagesend('Выражение выполнено успешно')
+                except Exception:
+                    messagesend('Допущена ошибка в SQL-выражении')
+            else:
+                messagesend('Открыта админ-панель. Возможности:\n1. Ввести SQL-запрос, включающий SELECT\n2. Ввести SQL-запрос, используя INSERT, DELETE или UPDATE')
+                return(0)
+
+def admin_panel():
+    messagesend('Открыта админ-панель. Возможности:\n1. Ввести SQL-запрос, включающий SELECT\n2. Ввести SQL-запрос, используя INSERT, DELETE или UPDATE')
+    for event in longpoll.listen():
+        if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
+            if event.text == '1':
+                select_sql()
+            if event.text == '2':
+                delete_insert_update_sql()
+            if event.text == 'back':
+                messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую неделю\nc) Получать прогноз погоды по расписанию')
+                return (0)
 
 def shedule_every_minutes():
     messagesend('Прогноз погоды будет приходить каждые полчаса')
@@ -110,19 +141,25 @@ for event in longpoll.listen():
         if event.text == 'c':
             messagesend('Когда должен приходить прогноз погоды?\n\n1. Каждые полчаса\n2. Каждый час\n3. Каждые 3 часа\n4. Каждые 6 часов\n5. Утром и вечером')
 
-        if event.text == 'insert':
-            insertid=cursor.execute("SELECT ID FROM Forecasts WHERE ID=(SELECT MAX(ID) FROM Forecasts)")
-            insertid=cursor.fetchone()
-            insertid= ''.join(str(insertid) for insertid in insertid)
-            insertid=int(insertid)+1
-            messagesend(str(insertid))
-            text=text.replace("По Цельсию сегодня ожидается", "Ожидается").replace("Завтра:", "На следующий день:")
-            insertintotable=cursor.execute("INSERT INTO Forecasts (ID, Date, Forecast) VALUES ('" + str(insertid) + "', '" + str(datetime.date.today()) + "', '" + str(text) + "');")
-            sqlite_connection.commit()
+        #for everyday update
+            #insertid=cursor.execute("SELECT ID FROM Forecasts WHERE ID=(SELECT MAX(ID) FROM Forecasts)")
+            #insertid=cursor.fetchone()
+            #insertid= ''.join(str(insertid) for insertid in insertid)
+            #insertid=int(insertid)+1
+            #messagesend(str(insertid))
+            #text=text.replace("По Цельсию сегодня ожидается", "Ожидается").replace("Завтра:", "На следующий день:")
+            #insertintotable=cursor.execute("INSERT INTO Forecasts (ID, Date, Forecast) VALUES ('" + str(insertid) + "', '" + str(datetime.date.today()) + "', '" + str(text) + "');")
+            #sqlite_connection.commit()
 
-        if event.text == 'select':
-            messagesend('Введите SELECT-запрос')
-            select_sql()
+        if event.text == '/admin':
+            admin_panel()
+           
+
+
+                
+            
+            
+            
             
          
 
