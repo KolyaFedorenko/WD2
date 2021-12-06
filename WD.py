@@ -1,16 +1,14 @@
-import requests
+import requests, vk_api, schedule, datetime, time, sqlite3, threading, secrets, string
 from bs4 import BeautifulSoup
-import vk_api
 from vk_api.utils import get_random_id
-import schedule 
-import datetime
-import time
-import sqlite3
-import threading
 
 vk_session = vk_api.VkApi(token='3e0d60982cd52ce4790a744e3386709cbeff9ff8e821e0a9125b867122fa2e2891a9f9aae50e746678775')
 sqlite_connection = sqlite3.connect('D:/Desktop/SQLiteStudio/SQLiteDataBase')
 cursor = sqlite_connection.cursor()
+
+from vk_api.longpoll import VkLongPoll, VkEventType
+longpoll = VkLongPoll(vk_session)
+vk = vk_session.get_api()
 
 url = 'https://rp5.ru/Погода_в_Абакане'
 response = requests.get(url)
@@ -22,10 +20,6 @@ for forecast in forecasts:
     text=text.replace("Сегодня ", "По Цельсию сегодня ").replace("ожидается ", "ожидается от ").replace("..", "° до ").replace("°C°F","°").replace(" °, ","°, ")
     text=text.replace("Завтра: ", "Завтра: по Цельсию от ").replace("°, +", "°, по Фаренгейту от +").replace("°, -", "°, по Фаренгейту от -")
 
-from vk_api.longpoll import VkLongPoll, VkEventType
-longpoll = VkLongPoll(vk_session)
-vk = vk_session.get_api()
-
 def messagesend(botmessage):
     vk.messages.send(user_id=event.user_id, message=botmessage, random_id=event.random_id)
 
@@ -36,7 +30,7 @@ def select_sql():
     messagesend('Введите SELECT-запрос')
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
-            if event.text != 'back':
+            if event.text != '/back':
                 try:
                     date=cursor.execute(event.text)
                     date=cursor.fetchall()
@@ -53,7 +47,7 @@ def delete_insert_update_sql():
     messagesend('Введите INSERT, DELETE или UPDATE-запрос')
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
-            if event.text != 'back':
+            if event.text != '/back':
                 try:
                     insertid=cursor.execute(event.text)
                     sqlite_connection.commit()
@@ -72,9 +66,25 @@ def admin_panel():
                 select_sql()
             if event.text == '2':
                 delete_insert_update_sql()
-            if event.text == 'back':
-                messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую неделю\nc) Получать прогноз погоды по расписанию')
+            if event.text == '/back':
+                messagesend('Еще раз введите "/back" для выхода из админ-панели')
                 return (0)
+
+def generate_token(lenght):
+    messagesend('Введите токен')
+    symbols = string.ascii_letters + string.digits
+    token = ''.join(secrets.choice(symbols) for i in range (lenght))
+    vk.messages.send(chat_id=3, message=token, random_id=get_random_id())
+    for event in longpoll.listen():
+      if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
+          if event.text != '/back':
+              if event.text == token:
+                  admin_panel()
+              if event.text != token:
+                  messagesend('Неверный токен')
+          else:
+            messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую неделю\nc) Получать прогноз погоды по расписанию')
+            return (0)
 
 def shedule_every_minutes():
     messagesend('Прогноз погоды будет приходить каждые полчаса')
@@ -106,8 +116,8 @@ def shedule_every_day():
         time.sleep(1)
 
 for event in longpoll.listen():
-
     if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
+        event.text=event.text.lower()
 
         if event.text == '1':
             minutes_thread=threading.Thread(target=shedule_every_minutes).start()
@@ -124,7 +134,7 @@ for event in longpoll.listen():
         if event.text == '5':
             everyday_thread=threading.Thread(target=shedule_every_day).start()
 
-        if event.text == 'Привет' or event.text == 'привет' or event.text == 'Начать' or event.text == 'начать' or event.text == 'menu' or event.text == 'Меню' or event.text == 'Назад':
+        if event.text == 'привет' or event.text == 'начать' or event.text == 'menu' or event.text == 'меню' or event.text == 'назад':
             messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую неделю\nc) Получать прогноз погоды по расписанию')
         
         if event.text == 'a':
@@ -134,8 +144,9 @@ for event in longpoll.listen():
             date=cursor.execute("SELECT Date, Forecast FROM Forecasts")
             date=cursor.fetchall()
             datenew= ''.join(str(date) for date in date)
-            datenew=datenew.replace("[", "").replace("]", "").replace("'", "").replace("(", "").replace(")", "").replace(",,", ", ").replace(",", ", ")
-            datenew=datenew.replace("-", "/").replace("от /", "от -").replace("до /", "до -").replace(",", ": ").replace("°:","°,").replace("2021", "\n\n2021")
+            #datenew=datenew.replace("[", "").replace("]", "").replace("'", "").replace("(", "").replace(")", "").replace(",,", ", ").replace(",", ", ")
+            #datenew=datenew.replace("-", "/").replace("от /", "от -").replace("до /", "до -").replace(",", ": ").replace("°:","°,").replace("2021", "\n\n2021")
+            datenew=datenew.replace("(","\n").replace(", '",": ").replace("'","").replace(")","")
             messagesend(datenew)
 
         if event.text == 'c':
@@ -152,19 +163,4 @@ for event in longpoll.listen():
             #sqlite_connection.commit()
 
         if event.text == '/admin':
-            admin_panel()
-           
-
-
-                
-            
-            
-            
-            
-         
-
-        
-        
-
-                    
-            
+            generate_token(15)       
