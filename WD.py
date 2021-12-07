@@ -13,18 +13,38 @@ vk = vk_session.get_api()
 url = 'https://rp5.ru/Погода_в_Абакане'
 response = requests.get(url)
 print(response.status_code)
-soup = BeautifulSoup(response.text, 'lxml')
-forecasts = soup.find_all('div', class_='round-5')
-for forecast in forecasts:
-    text=(forecast.text)
-    text=text.replace("Сегодня ", "По Цельсию сегодня ").replace("ожидается ", "ожидается от ").replace("..", "° до ").replace("°C°F","°").replace(" °, ","°, ")
-    text=text.replace("Завтра: ", "Завтра: по Цельсию от ").replace("°, +", "°, по Фаренгейту от +").replace("°, -", "°, по Фаренгейту от -")
+
+def get_forecast():
+    soup = BeautifulSoup(response.text, 'lxml')
+    forecasts = soup.find_all('div', class_='round-5')
+    for forecast in forecasts:
+        text=(forecast.text)
+        text=text.replace("Сегодня ", "По Цельсию сегодня ").replace("ожидается ", "ожидается от ").replace("..", "° до ").replace("°C°F","°").replace(" °, ","°, ")
+        text=text.replace("Завтра: ", "Завтра: по Цельсию от ").replace("°, +", "°, по Фаренгейту от +").replace("°, -", "°, по Фаренгейту от -")
+    return text
 
 def messagesend(botmessage):
     vk.messages.send(user_id=event.user_id, message=botmessage, random_id=event.random_id)
 
 def weather_message():
-    vk.messages.send(user_id=event.user_id, message=str(text), random_id=get_random_id())
+    vk.messages.send(user_id=event.user_id, message=str(get_forecast()), random_id=get_random_id())
+
+def adminchatsend(chatmessage):
+    message_id=vk.messages.send(chat_id=3, message=chatmessage, random_id=get_random_id())
+    return message_id
+
+def forward_adminchat(status):
+    vk.messages.send(user_id=event.user_id, message='', forward_messages=str(status), random_id=event.random_id)
+
+def send_menu():
+    messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую '
+                'неделю\nc) Получать прогноз погоды по расписанию\nd) Дополнительные возможности')
+
+
+def admin_func_mess():
+    messagesend('Открыта панель администратора. Возможности:\n\nРабота с SQL базой данных:\n1. Ввести SQL-запрос, '
+                'включающий SELECT\n2. Ввести SQL-запрос, включающий INSERT, DELETE или UPDATE\n\nДополнительные '
+                'возможности:\n3. Добавить или обновить прогноз погоды на сегодня')
 
 def select_sql():
     messagesend('Введите SELECT-запрос')
@@ -40,8 +60,8 @@ def select_sql():
                 except Exception:
                     messagesend('Допущена ошибка в SQL-выражении')
             else:
-                messagesend('Открыта админ-панель. Возможности:\n1. Ввести SQL-запрос, включающий SELECT\n2. Ввести SQL-запрос, используя INSERT, DELETE или UPDATE')
-                return(0)
+                admin_func_mess()
+                return
 
 def delete_insert_update_sql():
     messagesend('Введите INSERT, DELETE или UPDATE-запрос')
@@ -55,26 +75,87 @@ def delete_insert_update_sql():
                 except Exception:
                     messagesend('Допущена ошибка в SQL-выражении')
             else:
-                messagesend('Открыта админ-панель. Возможности:\n1. Ввести SQL-запрос, включающий SELECT\n2. Ввести SQL-запрос, используя INSERT, DELETE или UPDATE')
-                return(0)
+                admin_func_mess()
+                return
+
+def add_user():
+    getuser=get_user_id()
+    check_id=cursor.execute("SELECT User_ID from Users")
+    check_id=cursor.fetchall()
+    check_id= ''.join(str(check_id) for check_id in check_id)
+    check_id=check_id.replace("[(", "").replace(")]","").replace(",,",", ").replace("(","").replace(")","").replace(","," ")
+    check_id="" + getuser + "" in check_id
+    if check_id:
+        adminchatsend('Пользователь с ID "' + getuser + '" не добавлен, так как уже существует в базе')
+    else:
+        try:
+            cursor.execute("SELECT ID FROM Users WHERE ID=(SELECT MAX(ID) FROM Users)")
+            userid=cursor.fetchone()
+            userid= ''.join(str(userid) for userid in userid)
+            userid=int(userid)+1
+            add_user=cursor.execute("INSERT INTO Users (ID, User_ID, Role) VALUES ('" + str(userid) + "', '" + getuser + "', 'User');")
+            sqlite_connection.commit()
+            adminchatsend('Добавлен новый пользователь с ID "' + getuser + '"')
+        except Exception:
+            adminchatsend('При добавлении пользователя с ID "' + getuser + '" возникла ошибка')
+
+def update_db():
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'lxml')
+    forecasts = soup.find_all('div', class_='round-5')
+    for forecast in forecasts:
+        text=(forecast.text)
+        text=text.replace("Сегодня ", "По Цельсию сегодня ").replace("ожидается ", "ожидается от ").replace("..", "° до ").replace("°C°F","°").replace(" °, ","°, ")
+        text=text.replace("Завтра: ", "Завтра: по Цельсию от ").replace("°, +", "°, по Фаренгейту от +").replace("°, -", "°, по Фаренгейту от -")
+
+    check_date=cursor.execute("SELECT Date from Forecasts")
+    check_date=cursor.fetchall()
+    check_date= ''.join(str(check_date) for check_date in check_date)
+    check_date=check_date.replace("',)('"," ").replace("  "," ").replace("(","").replace(")","").replace("'","").replace(",","")
+    check_date="" + str(datetime.date.today()) + "" in check_date
+
+    if check_date:
+        update_forecast=cursor.execute("UPDATE Forecasts SET Forecast='" + str(text) + "' WHERE Date='" + str(datetime.date.today()) + "'")
+        sqlite_connection.commit()
+        db_status=adminchatsend('Прогноз на дату ' + str(datetime.date.today()) + ' обновлен, так как дата уже добавлена')
+        return db_status
+
+    else:
+        try:
+            insertid=cursor.execute("SELECT ID FROM Forecasts WHERE ID=(SELECT MAX(ID) FROM Forecasts)")
+            insertid=cursor.fetchone()
+            insertid= ''.join(str(insertid) for insertid in insertid)
+            insertid=int(insertid)+1
+            text=text.replace("По Цельсию сегодня ожидается", "Ожидается").replace("Завтра:", "На следующий день:")
+            insertintotable=cursor.execute("INSERT INTO Forecasts (ID, Date, Forecast) VALUES ('" + str(insertid) + "', '" + str(datetime.date.today()) + "', '" + str(text) + "');")
+            sqlite_connection.commit()
+            db_status=adminchatsend('База была обновлена ' + str(datetime.date.today()) + ' в ' + str(datetime.datetime.now().time().strftime('%H:%M')))
+            return db_status
+        except Exception:
+            db_status=adminchatsend('Возникла ошибка при обновлении базы ' + str(datetime.date.today()) + ' в ' + str(datetime.datetime.now().time().strftime('%H:%M')))
+            return db_status
 
 def admin_panel():
-    messagesend('Открыта админ-панель. Возможности:\n1. Ввести SQL-запрос, включающий SELECT\n2. Ввести SQL-запрос, используя INSERT, DELETE или UPDATE')
+    admin_func_mess()
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
             if event.text == '1':
                 select_sql()
             if event.text == '2':
                 delete_insert_update_sql()
+            if event.text == '3':
+                messagesend('Добавление актуального прогноза...')
+                db_status=update_db()
+                forward_adminchat(db_status)
             if event.text == '/back':
                 messagesend('Еще раз введите "/back" для выхода из админ-панели')
-                return (0)
+                return
 
 def generate_token(lenght):
-    messagesend('Введите токен')
+    messagesend('Введите актуальный токен')
     symbols = string.ascii_letters + string.digits
     token = ''.join(secrets.choice(symbols) for i in range (lenght))
-    vk.messages.send(chat_id=3, message=token, random_id=get_random_id())
+    token_message_id=adminchatsend(token)
     for event in longpoll.listen():
       if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
           if event.text != '/back':
@@ -83,8 +164,34 @@ def generate_token(lenght):
               if event.text != token:
                   messagesend('Неверный токен')
           else:
-            messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую неделю\nc) Получать прогноз погоды по расписанию')
-            return (0)
+            vk.messages.delete(message_ids=str(token_message_id), delete_for_all=1)
+            send_menu()
+            return
+
+def get_user_id():
+    getuser = vk.users.get(user_id=event.user_id, fields='')
+    getuser= ''.join(str(getuser) for getuser in getuser)
+    getuser = list(filter(str.isdigit, getuser))
+    getuser=str(getuser).replace("', '", "").replace("['", "").replace("']","")
+    return getuser
+
+def check_user_role():
+    id=get_user_id()
+    role=cursor.execute("SELECT Role FROM Users WHERE User_ID='" + id + "'")
+    role=cursor.fetchall()
+    role=str(role).replace("',), ('"," ").replace("[('","").replace("',)]","")
+    return role
+
+def assistant_panel():
+    messagesend('\nОткрыта панель ассистента. Возможности:\n\n1. Добавить прогноз погоды на сегодня')
+    for event in longpoll.listen():
+        if event.type == VkEventType.MESSAGE_NEW and event.to_me and event.text:
+            if event.text == '1':
+                messagesend('Добавление актуального прогноза...')
+                db_status=update_db()
+                forward_adminchat(db_status)
+                send_menu()
+                return
 
 def shedule_every_minutes():
     messagesend('Прогноз погоды будет приходить каждые полчаса')
@@ -135,32 +242,55 @@ for event in longpoll.listen():
             everyday_thread=threading.Thread(target=shedule_every_day).start()
 
         if event.text == 'привет' or event.text == 'начать' or event.text == 'menu' or event.text == 'меню' or event.text == 'назад':
-            messagesend('Список возможностей:\na) Получить текущий прогноз погоды\nb) Получить прогноз погоды за прошедшую неделю\nc) Получать прогноз погоды по расписанию')
+            add_user()
+            send_menu()
         
         if event.text == 'a':
-            messagesend(str(text))
+            messagesend('Получение прогноза погоды...')
+            messagesend(str(get_forecast()))
 
         if event.text == 'b':
-            date=cursor.execute("SELECT Date, Forecast FROM Forecasts")
+            date=cursor.execute("SELECT Date, Forecast FROM Forecasts ORDER BY ID DESC LIMIT 7")
             date=cursor.fetchall()
             datenew= ''.join(str(date) for date in date)
-            #datenew=datenew.replace("[", "").replace("]", "").replace("'", "").replace("(", "").replace(")", "").replace(",,", ", ").replace(",", ", ")
-            #datenew=datenew.replace("-", "/").replace("от /", "от -").replace("до /", "до -").replace(",", ": ").replace("°:","°,").replace("2021", "\n\n2021")
-            datenew=datenew.replace("(","\n").replace(", '",": ").replace("'","").replace(")","")
+            datenew=datenew.replace("(","\n").replace(", '",": ").replace("'","").replace(")","").replace("2021","\n2021")
             messagesend(datenew)
 
         if event.text == 'c':
-            messagesend('Когда должен приходить прогноз погоды?\n\n1. Каждые полчаса\n2. Каждый час\n3. Каждые 3 часа\n4. Каждые 6 часов\n5. Утром и вечером')
+            messagesend('Когда должен приходить прогноз погоды?\n\n1. Каждые полчаса\n2. Каждый час'
+                        '\n3. Каждые 3 часа\n4. Каждые 6 часов\n5. Утром и вечером')
 
-        #for everyday update
-            #insertid=cursor.execute("SELECT ID FROM Forecasts WHERE ID=(SELECT MAX(ID) FROM Forecasts)")
-            #insertid=cursor.fetchone()
-            #insertid= ''.join(str(insertid) for insertid in insertid)
-            #insertid=int(insertid)+1
-            #messagesend(str(insertid))
-            #text=text.replace("По Цельсию сегодня ожидается", "Ожидается").replace("Завтра:", "На следующий день:")
-            #insertintotable=cursor.execute("INSERT INTO Forecasts (ID, Date, Forecast) VALUES ('" + str(insertid) + "', '" + str(datetime.date.today()) + "', '" + str(text) + "');")
-            #sqlite_connection.commit()
+        if event.text == 'd':
+            role=check_user_role()
+            adminrole="Admin" in role
+            assistantrole="Assistant" in role
+            userrole="User" in role
+            if adminrole:
+                messagesend('Вы являетесь администратором. Для открытия панели администратора введите "/admin". '
+                            'Для закрытия панели администратора введите "/back". Все токены для входа в панель '
+                            'администратора отправляются в чат администраторов')
+            else:
+                if assistantrole:
+                    messagesend('Вы являетесь ассистентом. Для открытия панели ассистента введите "/assistant". '
+                                'Для закрытия панели администратора введите "/back"')
+                else:
+                    if userrole:
+                        messagesend('Вам недоступны дополнительные возможности')
 
         if event.text == '/admin':
-            generate_token(15)       
+            role=check_user_role()
+            messagesend('Проверка вашей роли...')
+            role="Admin" in role
+            if role:
+                generate_token(30)
+            else:
+                messagesend('Вы не являетесь администратором')
+
+        if event.text == '/assistant':
+            role=check_user_role()
+            messagesend('Проверка вашей роли...')
+            role="Assistant" in role
+            if role:
+                assistant_panel()
+            else:
+                messagesend('Вы не являетесь ассистентом')
