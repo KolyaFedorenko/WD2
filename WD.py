@@ -2,8 +2,8 @@ import requests, vk_api, schedule, datetime, time, sqlite3, threading, secrets, 
 from bs4 import BeautifulSoup
 from vk_api.utils import get_random_id
 
-vk_session = vk_api.VkApi(token='3e0d60982cd52ce4790a744e3386709cbeff9ff8e821e0a9125b867122fa2e2891a9f9aae50e746678775')
-sqlite_connection = sqlite3.connect('D:/Desktop/SQLiteStudio/SQLiteDataBase')
+vk_session = vk_api.VkApi(token='your_token') #вместо your_path необходимо вставить longpoll-токен вашего сообщества
+sqlite_connection = sqlite3.connect('your_path_to_sqlite_database') # вместо your_path_to_sqlite_database необходимо вставить ваш путь к базе данных SQLite
 cursor = sqlite_connection.cursor()
 
 from vk_api.longpoll import VkLongPoll, VkEventType
